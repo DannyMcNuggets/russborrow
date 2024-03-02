@@ -9,7 +9,7 @@ class Borrowed:
         self._dict = dict(sorted(found_borrowed.items(), key=lambda x: x[1].get("Repeats", 1), reverse=True))  # order by repeats
         self._len = len(words)
         self._bor = sum(len(value["Instances"]) for value in found_borrowed.values())
-        self._percent = round(self._bor / self._len * 100, 2)
+        self._percent = round(self._bor / self._len * 100, 2) if (self._len > 0) else 0
 
     @property
     def dict(self):
@@ -30,7 +30,7 @@ class Borrowed:
 
 def extract(the_text=None, output_file=None):    
     words = [] # read words from the original text file
-    words = read_txt(the_text) if the_text.endswith(".txt") else read_str(the_text)
+    words = read_txt(the_text) if the_text.endswith(".txt") else clean_and_split(the_text)
 
     # normalize words
     normalized_words = normalize(words)
@@ -41,8 +41,10 @@ def extract(the_text=None, output_file=None):
     # check if normalized word is present in borrowed_words
     found_borrowed = find_borrowed(normalized_words, borrowed_words)
 
-    ready_dictionary = Borrowed(words, found_borrowed) #create instance
+    #create instance
+    ready_dictionary = Borrowed(words, found_borrowed)
 
+    #manage output file if provided
     if output_file:
         expanded_output_path = os.path.expanduser(output_file)
         if output_file.endswith(".txt"):
@@ -57,56 +59,73 @@ def extract(the_text=None, output_file=None):
     return ready_dictionary
 
 
+def clean_and_split(text):
+    words = text.split()
+    words_cleaned = []
+
+    for word in words: 
+        if not word[-1].isalnum():
+            while word and not word[-1].isalnum():
+                word = word[:-1]
+            while word and not word[0].isalnum():
+                word = word[1:]
+            if word and word[-1].isalnum():
+                words_cleaned.append(word)
+        else:
+            words_cleaned.append(word)
+
+    return words_cleaned
+
+
+
 def read_txt(text_file):
     words_from_file = []
     expanded_file_path = os.path.expanduser(text_file)
+
     with open(expanded_file_path, "r") as file:
         for line in file:
-            cleaned_line = ''
-            for char in line.replace('ё', 'е'): #pymorphy dictionary not using ё!
-                if char.isalnum() or char == '-': #keep alphanumeric or '-' as it might be part of a word
-                    cleaned_line += char
-                else:
-                    cleaned_line += ' '
-            words_from_file.extend(cleaned_line.split())
+            words_from_file.extend(clean_and_split(line))
+
     return words_from_file
-
-
-def read_str(text_string):
-    words_from_string = []
-    cleaned_text = the_text.replace('ё', 'е')  # replace 'ё' with 'е'
-    cleaned_text = cleaned_text.translate(str.maketrans('', '', string.punctuation.replace('-', '')))  # remove punctuation, excluding '-'
-    words_from_string.extend(cleaned_text.split())
-    return words_from_string
 
 
 def normalize(words):
     morph = pymorphy2.MorphAnalyzer()
     normalized_words = {}
+
     for word in words:
         normalized_word = morph.parse(word)[0].normal_form.lower()
         normalized_words.setdefault(normalized_word, []).append(word)
+
     return normalized_words
 
 
-def load_borrowed():
+def load_borrowed(): 
     borrowed_dictionary = resources.files(__name__) / 'borrowed_dictionary.csv'
     borrowed_words = {}
+
     with open(borrowed_dictionary, "r") as csv_file:
         csv_reader = csv.DictReader(csv_file)
         for row in csv_reader:
             borrowed_words[row["Key"].lower()] = {"Value": row["Value"], "Origin": row["Origin"], "Repeats": 0}
+
     return borrowed_words
 
 
 def find_borrowed(normalized_words, borrowed_words):
     found_borrowed = {}  
+    
     for word, instances in normalized_words.items():
         if word in borrowed_words:
-            repeats = len(instances) # count how many times the word is repeated in the text
-            borrowed_words[word]["Repeats"] = repeats # add value "Repeats" to key,value pair in borrowed_words
-            found_borrowed[word] = borrowed_words[word] 
-            found_borrowed[word]["Instances"] = instances #save the list of prenormalized words
+            repeats = len(instances)
+            borrowed_words[word]["Repeats"] = repeats
+            found_borrowed[word] = {
+                "Value": borrowed_words[word]["Value"],
+                "Origin": borrowed_words[word]["Origin"],
+                "Repeats": borrowed_words[word]["Repeats"],
+                "Instances": instances
+            }
+
     return found_borrowed
 
 
@@ -122,7 +141,8 @@ def output_file_csv(expanded_output_path, ready_dictionary):
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(["Word", "Value", "Origin", "Repeats", "Instances"])
         for key, value in ready_dictionary.dict.items():
-            csv_writer.writerow([key, value["Value"], value["Origin"], value["Repeats"], value["Instances"]])
+            instances_str = ', '.join(value["Instances"])
+            csv_writer.writerow([key, value["Value"], value["Origin"], value["Repeats"], instances_str])
 
 
 
