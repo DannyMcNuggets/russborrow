@@ -2,7 +2,8 @@ russborrow
 ==========
 
 This is a test version of the russborrow module.
-PyPI link: `PyPI`_
+
+PyPI link: `here`_
 
 Overview
 ========
@@ -123,6 +124,6 @@ Example entry in the dictionary::
 
 .. _Wiktionary: https://ru.wiktionary.org/wiki/Приложение:Заимствованные_слова_в_русском_языке
 .. _Pymorphy2: https://pymorphy2.readthedocs.io/en/stable/
-.. _PyPI: https://pypi.org/project/russborrow/
+.. _here: https://pypi.org/project/russborrow/
 
 
